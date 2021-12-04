@@ -8,10 +8,10 @@ import * as _ from 'lodash';
 
 @Injectable()
 export class ItemsService {
-  private baseUrl = `https://hacker-news.firebaseio.com/v0`;
+  private readonly baseUrl = `https://hacker-news.firebaseio.com/v0`;
+  private readonly weekTimeStamp: number;
   private topTenWordsInLast25Stories: string[];
   private topTenWordsInLastWeekStories: string[];
-  private readonly weekTimeStamp: number;
 
   constructor (private httpService: HttpService) {
     const timestampInSeconds = Math.floor(Date.now() / 1000);
@@ -32,13 +32,13 @@ export class ItemsService {
     return this.getMostOccuringWords(wordCounts, 10)
   }
 
-  async getLast25Stories(): Promise<Item[]> {
+  private async getLast25Stories(): Promise<Item[]> {
     const newStories: number[] = await this.getStories(StoryList.NEW);
     const last25ItemIds: number[] = newStories.slice(0, 25);
     return await this.getItemsByItemId(last25ItemIds);
   }
 
-  async getPostsFromPastWeek() {
+  private async getPostsFromPastWeek() {
     const maxItemId: number = await this.getMaxItemId()
     const items = await this.filterPostsFromPastWeek(maxItemId);
     const posts: Item[] = items.filter(item => item.title)
@@ -46,28 +46,28 @@ export class ItemsService {
     return posts;
   }
 
-  async setAllStoryItems() {
+  private async setAllStoryItems() {
     // this.allStoryIds.sort((a,b) => b - a);
   }
 
-  async getStories(storyList: StoryList): Promise<number[]> {
+  private async getStories(storyList: StoryList): Promise<number[]> {
     const response = await this.httpService.axiosRef.get(`${this.baseUrl}/${storyList}.json?print=pretty`);
     return response.data as number[];
   }
 
-  async getMaxItemId(): Promise<number> {
+  private async getMaxItemId(): Promise<number> {
     const response = await this.httpService.axiosRef.get(`${this.baseUrl}/maxitem.json?print=pretty`);
     return response.data as number;
   }
 
-  async filterPostsFromPastWeek(maxItemId: number) {
+  private async filterPostsFromPastWeek(maxItemId: number) {
     const itemIds = _.range(maxItemId, maxItemId-35000)
     const items: Item[] = await this.groupParallelCalls(this.getItemsByItemId, itemIds);
     
     return items;
   }
 
-  async groupParallelCalls(func: Function, itemIds: number[]) {
+  private async groupParallelCalls(func: Function, itemIds: number[]) {
     let splitItemIds: number[][] = this.setupParallelCall(itemIds);
     console.log(`${splitItemIds[0].length}`)
 
@@ -80,7 +80,7 @@ export class ItemsService {
                 .catch(err => [new Item()]);
   }
 
-  async parallelCall(func: Function, itemIds: number[]) {
+  private async parallelCall(func: Function, itemIds: number[]) {
     const splitItemIds: number[][] = this.setupParallelCall(itemIds);
 
     return await Promise.all(splitItemIds.map(async itemIds => 
@@ -92,7 +92,7 @@ export class ItemsService {
                 .catch(err => [new Item()]);
   }
 
-  setupParallelCall(itemIds: number[]) {
+  private setupParallelCall(itemIds: number[]) {
     const splitItemIds: number[][] = [];
     const tenthOfLength: number = itemIds.length * 1/10;
     let start: number = 0, end: number = tenthOfLength;
@@ -105,14 +105,14 @@ export class ItemsService {
     return splitItemIds;
   }
 
-  async getSingleItem(itemId: number): Promise<Item> {
+  private async getSingleItem(itemId: number): Promise<Item> {
     return await this.httpService.axiosRef
                     .get(`${this.baseUrl}/item/${itemId}.json`)
                     .then(response => response.data as Item)
                     .catch(err => new Item());
   }
 
-  async getItemsByItemId(itemIds: number[]): Promise<Item[]> {
+  private async getItemsByItemId(itemIds: number[]): Promise<Item[]> {
     const endpoints: string[] = itemIds.map(itemId=>
                                   `${this.baseUrl}/item/${itemId}.json?print=pretty`
                                   );
@@ -131,7 +131,7 @@ export class ItemsService {
     return items;
   }
 
-  getWordCountsInTitles(items: Item[]): object {
+  private getWordCountsInTitles(items: Item[]): object {
     const titleWords: string[] = items.flatMap(item => 
                                   item.title.toLowerCase()
                                   .replace(/[^a-z\s]/gi, "")
@@ -148,7 +148,7 @@ export class ItemsService {
     return wordCounts;
   }
 
-  getMostOccuringWords(wordCount: object, limit: number): string[] {
+  private getMostOccuringWords(wordCount: object, limit: number): string[] {
     const sortedWordCount: any[][] = Object.entries(wordCount)
                                       .sort((x,y) => (x[1]-y[1]))
                                       .slice(0, limit);
