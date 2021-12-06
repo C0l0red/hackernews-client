@@ -5,7 +5,15 @@ import {ItemsRequestsService} from './items.requests.service';
 import * as _ from 'lodash';
 import { User } from '../entities/user.entity';
 import { Predicate } from '../interfaces/predicate.interface';
+import { ItemType } from '../entities/item-type.entity';
 
+declare global{
+	interface Array<T> {
+		contains(element: T): boolean;
+	}
+}
+
+Array.prototype.contains = function<T> (this: T[], elem: T) {return this.indexOf(elem) >= 0;}
 
 @Injectable()
 export class ItemsService {  
@@ -17,9 +25,9 @@ export class ItemsService {
   async findCommonestWordsInLast25StoryTitles(numberOfWords: number): Promise<string[]> {
     const last25Stories: Item[] = await this.getLatestStories(25);
     const wordCounts: object = this.getWordCountsInTitles(last25Stories);
-    this.topTenWordsInLast25Stories = this.getMostOccuringWords(wordCounts, numberOfWords);
+    const commonWords = this.getMostOccuringWords(wordCounts, numberOfWords);
 
-    return this.topTenWordsInLast25Stories;
+    return commonWords;
   }
 
   async findCommonestWordsInPostTitlesFromPastWeek(numberOfWords: number): Promise<string[]> {
@@ -28,13 +36,18 @@ export class ItemsService {
     const postsFromPastWeek: Item[] = await this.getPostsFromTimestampToNow(weekTimeStamp);
     const wordCounts: object = this.getWordCountsInTitles(postsFromPastWeek);
 
-    this.topTenWordsInPostsFromPastWeek = this.getMostOccuringWords(wordCounts, numberOfWords)
+    const commonestWords = this.getMostOccuringWords(wordCounts, numberOfWords)
 
-    return this.topTenWordsInPostsFromPastWeek;
+    return commonestWords;
   }
 
-  async findCommonestWordsInLast600StoriesFromUsersWithKarma(minimumKarma: number) {
-      const last600StoriesFromUsersWithKarma = this.getLast600StoriesFromUsersWithKarma(minimumKarma);
+  async findCommonestWordsInLast600StoriesFromUsersWithKarma(numberOfWords: number, minimumKarma: number) {
+    const last600StoriesFromUsersWithKarma: Item[] = await this.getLast600StoriesFromUsersWithKarma(minimumKarma);
+		const wordCounts: object = this.getWordCountsInTitles(last600StoriesFromUsersWithKarma);
+
+		const commonestWords: string[] = this.getMostOccuringWords(wordCounts, numberOfWords);
+
+		return commonestWords;
   }
 
   private async getLatestStories(numberOfStories: number): Promise<Item[]> {
@@ -52,10 +65,11 @@ export class ItemsService {
     return posts;
   }
 
-  private async getLast600StoriesFromUsersWithKarma(minimumKarma: number) {
+  private async getLast600StoriesFromUsersWithKarma(minimumKarma: number): Promise<Item[]> {
 		const predicate: Predicate<User> = (user: User) => user.karma >= minimumKarma;
-		this.getStoriesFromUsersWithPredicate(predicate, 600);
-		
+		const stories: Item[] = await this.getStoriesFromUsersWithPredicate(predicate, 600);
+
+		return stories;		
 	}
 	
 	
@@ -66,20 +80,62 @@ export class ItemsService {
     return items;
   }
 
-	private async getStoriesFromUsersWithPredicate(predicate: Predicate<User>, numberOfUsers: number) {
-		let filteredUsers: User[], usersFilteredOut: User[];
+	private async getStoriesFromUsersWithPredicate(predicate: Predicate<User>, numberOfStories: number) {
+		let filteredStories: Item[] = [];
+		let filteredUserIds: string[] = [], userIdsFilteredOut: string[] = [];
 		let latestStoryIds: number[] = await this.requestsService.getStories(StoryList.NEW);
+		let earliestItemId: number = latestStoryIds.slice(-1)[0]
+
+		const updateFilteredStories = async (storyItems: Item[]) =>	{
+			let userIds: string[] = new Array(...new Set(storyItems.map(item => item.by)))
+
+			userIds = userIds.filter(name => {
+				return !(filteredUserIds.contains(name)) && !(userIdsFilteredOut.contains(name))
+			});
+
+			let userObjects: User[] = await this.requestsService.getObjectsByObjectId<User>(User, userIds);
+
+			filteredUserIds = filteredUserIds.concat(
+														userObjects.filter(predicate)
+														.map(user => user.id)
+													);
+			userIdsFilteredOut = userObjects.filter(user => !(user.id in filteredUserIds))
+																.map(user => user.id);
+
+			for (let item of storyItems) {
+				if (filteredStories.length >= 600) return;
+				if (filteredUserIds.contains(item.by)) {filteredStories.push(item)}
+			}
+		}
 
 		const storyItems: Item[] = await this.requestsService.groupParallelCalls(Item, latestStoryIds);
-		const userNames: string[] = new Array(...new Set(storyItems.map(item => item.by)))
-		let userObjects: User[] = await this.requestsService.getObjectsByObjectId<User>(User, userNames);
+		await updateFilteredStories(storyItems);
+		console.log(filteredStories.length);
+		
+		while (filteredStories.length < numberOfStories) {
+			const doUpdateFilteredStories = async () => {
+				if (filteredStories.length >= 600) return;
+				
+				const itemIds: number[] = _.range(earliestItemId - 1, earliestItemId - 1001);
+				earliestItemId = itemIds.slice(-1)[0];
+				let items: Item[] = await this.requestsService.groupParallelCalls(Item, itemIds);
+				items = items.filter(item => item.type === ItemType.STORY);
 
-		filteredUsers = userObjects.filter(predicate);
+				await updateFilteredStories(items)
+				console.log(filteredStories.length);
+			}
 
-		// for (let user of userObjects) {
-			
-		// }
+			await Promise.all([
+				doUpdateFilteredStories(),
+				doUpdateFilteredStories(),
+				doUpdateFilteredStories(),
+				doUpdateFilteredStories(),
+			])
+			.catch(err => {console.log("Error doing updateFilterStories", err)});
+		}
+		console.log(filteredStories);
 
+		return filteredStories;
 	}
   
 

@@ -16,9 +16,14 @@ export class ItemsController {
   }
 
   @Get('users-with-karma/last-600-stories/commonest-words-in-titles')
-  findCommonestWordsInLast600StoriesFromUsersWithKarma(@Query() query) {
+  findCommonestWordsInLast600StoriesFromUsersWithKarma() {
+    const numberOfWords = 10;
+    const minimumKarma = 10_000;
 
-    return this.itemsService.findCommonestWordsInLast600StoriesFromUsersWithKarma(10_000);
+    return this.itemsService.findCommonestWordsInLast600StoriesFromUsersWithKarma(
+      numberOfWords,
+      minimumKarma,
+    );
   }
 
 }
