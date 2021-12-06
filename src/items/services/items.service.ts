@@ -7,18 +7,9 @@ import { User } from '../entities/user.entity';
 import { Predicate } from '../interfaces/predicate.interface';
 import { ItemType } from '../entities/item-type.entity';
 
-declare global{
-	interface Array<T> {
-		contains(element: T): boolean;
-	}
-}
-
-Array.prototype.contains = function<T> (this: T[], elem: T) {return this.indexOf(elem) >= 0;}
 
 @Injectable()
 export class ItemsService {  
-  private topTenWordsInLast25Stories: string[];
-  private topTenWordsInPostsFromPastWeek: string[];
 
   constructor (private requestsService: ItemsRequestsService) {}
 
@@ -90,7 +81,7 @@ export class ItemsService {
 			let userIds: string[] = new Array(...new Set(storyItems.map(item => item.by)))
 
 			userIds = userIds.filter(name => {
-				return !(filteredUserIds.contains(name)) && !(userIdsFilteredOut.contains(name))
+				return !(filteredUserIds.includes(name)) && !(userIdsFilteredOut.includes(name))
 			});
 
 			let userObjects: User[] = await this.requestsService.getObjectsByObjectId<User>(User, userIds);
@@ -104,13 +95,12 @@ export class ItemsService {
 
 			for (let item of storyItems) {
 				if (filteredStories.length >= 600) return;
-				if (filteredUserIds.contains(item.by)) {filteredStories.push(item)}
+				if (filteredUserIds.includes(item.by)) {filteredStories.push(item)}
 			}
 		}
 
 		const storyItems: Item[] = await this.requestsService.groupParallelCalls(Item, latestStoryIds);
 		await updateFilteredStories(storyItems);
-		console.log(filteredStories.length);
 		
 		while (filteredStories.length < numberOfStories) {
 			const doUpdateFilteredStories = async () => {
@@ -122,7 +112,6 @@ export class ItemsService {
 				items = items.filter(item => item.type === ItemType.STORY);
 
 				await updateFilteredStories(items)
-				console.log(filteredStories.length);
 			}
 
 			await Promise.all([
@@ -133,7 +122,6 @@ export class ItemsService {
 			])
 			.catch(err => {console.log("Error doing updateFilterStories", err)});
 		}
-		console.log(filteredStories);
 
 		return filteredStories;
 	}
