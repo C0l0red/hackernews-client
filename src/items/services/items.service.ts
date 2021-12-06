@@ -4,6 +4,7 @@ import { StoryList } from '../entities/story-list.entity';
 import {ItemsRequestsService} from './items.requests.service';
 import * as _ from 'lodash';
 import { User } from '../entities/user.entity';
+import { Predicate } from '../interfaces/predicate.interface';
 
 
 @Injectable()
@@ -52,8 +53,8 @@ export class ItemsService {
   }
 
   private async getLast600StoriesFromUsersWithKarma(minimumKarma: number) {
-		const predicate: Function = (user: User) => user.karma >= minimumKarma;
-
+		const predicate: Predicate<User> = (user: User) => user.karma >= minimumKarma;
+		this.getStoriesFromUsersWithPredicate(predicate, 600);
 		
 	}
 	
@@ -65,14 +66,19 @@ export class ItemsService {
     return items;
   }
 
-	private async getStoriesFromUsersWithPredicate(predicate: Function, numberOfUsers: number) {
+	private async getStoriesFromUsersWithPredicate(predicate: Predicate<User>, numberOfUsers: number) {
+		let filteredUsers: User[], usersFilteredOut: User[];
 		let latestStoryIds: number[] = await this.requestsService.getStories(StoryList.NEW);
-		if (numberOfUsers < latestStoryIds.length) {
-			latestStoryIds = latestStoryIds.slice(0, numberOfUsers);
-		}
 
 		const storyItems: Item[] = await this.requestsService.groupParallelCalls(Item, latestStoryIds);
-		const userNames: string[] = storyItems.map(item => item.by);
+		const userNames: string[] = new Array(...new Set(storyItems.map(item => item.by)))
+		let userObjects: User[] = await this.requestsService.getObjectsByObjectId<User>(User, userNames);
+
+		filteredUsers = userObjects.filter(predicate);
+
+		// for (let user of userObjects) {
+			
+		// }
 
 	}
   

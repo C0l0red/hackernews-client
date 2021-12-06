@@ -33,25 +33,31 @@ export class ItemsRequestsService {
   async groupParallelCalls<Type>(Type: HNObject, objectIds: number[]): Promise<Type[]> {
     let splitObjectIds: number[][] = this.setupParallelCall(objectIds);
 
-    return await Promise.all(splitObjectIds.map(async objectIds => 
+    let objects = await Promise.all(splitObjectIds.map(async objectIds => 
                     await this.parallelCall<Type>(Type, objectIds)
                 ))
                 .then(response => response.flatMap(
                   items => items as Type[]
                 ))
                 .catch(err => Array<Type>());
+
+    objects = objects.filter(i => i !==null);
+    
+    return objects;
   }
 
   private async parallelCall<Type>(Type: HNObject, objectIds: number[]): Promise<Type[]> {
     const splitObjectIds: number[][] = this.setupParallelCall(objectIds);
 
-    return await Promise.all(splitObjectIds.map(async objectIds => 
+    const objects = await Promise.all(splitObjectIds.map(async objectIds => 
                     await this.getObjectsByObjectId<Type>(Type, objectIds)
                 ))
                 .then(response => response.flatMap(
                   items => items as Type[]
                 ))
                 .catch(err => Array<Type>());
+                
+    return objects;
   }
 
   private setupParallelCall(objectIds: number[]) {
@@ -67,12 +73,12 @@ export class ItemsRequestsService {
     return splitObjectIds;
   }
   
-  async getObjectsByObjectId<Type>(Type: HNObject, objectIds: number[]): Promise<Type[]> {
+  async getObjectsByObjectId<Type>(Type: HNObject, objectIds: Array<string|number>): Promise<Type[]> {
     const endpoints: string[] = objectIds.map(objectId=>
                                   `${ItemsRequestsService.baseUrl}/${Type.toString()}/${objectId}.json?print=pretty`
 
                                   );
-    const objects: Type[] = await Promise.all(endpoints.map(endpoint => 
+    const objects = await Promise.all(endpoints.map(endpoint => 
         this.httpService.axiosRef.get(endpoint)))
 
           .then(responses => responses.map(
