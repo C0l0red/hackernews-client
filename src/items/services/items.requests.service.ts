@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { Item } from '../entities/item.entity';
 import {HttpException, HttpStatus} from '@nestjs/common';
 import { StoryList } from '../entities/story-list.entity';
+import {HNObject} from '../interfaces/hn-object.interface'
 
 @Injectable()
 export class ItemsRequestsService {
@@ -29,59 +30,59 @@ export class ItemsRequestsService {
                     .catch(err => new Item());
   }
 
-  async groupParallelCalls(itemIds: number[]) {
-    let splitItemIds: number[][] = this.setupParallelCall(itemIds);
+  async groupParallelCalls<Type>(Type: HNObject, objectIds: number[]): Promise<Type[]> {
+    let splitObjectIds: number[][] = this.setupParallelCall(objectIds);
 
-    return await Promise.all(splitItemIds.map(async itemIds => 
-                    await this.parallelCall(itemIds)
+    return await Promise.all(splitObjectIds.map(async objectIds => 
+                    await this.parallelCall<Type>(Type, objectIds)
                 ))
                 .then(response => response.flatMap(
-                  items => items
+                  items => items as Type[]
                 ))
-                .catch(err => [new Item()]);
+                .catch(err => Array<Type>());
   }
 
-  private async parallelCall(itemIds: number[]) {
-    const splitItemIds: number[][] = this.setupParallelCall(itemIds);
+  private async parallelCall<Type>(Type: HNObject, objectIds: number[]): Promise<Type[]> {
+    const splitObjectIds: number[][] = this.setupParallelCall(objectIds);
 
-    return await Promise.all(splitItemIds.map(async itemIds => 
-                    await this.getItemsByItemId(itemIds)
+    return await Promise.all(splitObjectIds.map(async objectIds => 
+                    await this.getObjectsByObjectId<Type>(Type, objectIds)
                 ))
                 .then(response => response.flatMap(
-                  items => items
+                  items => items as Type[]
                 ))
-                .catch(err => [new Item()]);
+                .catch(err => Array<Type>());
   }
 
-  private setupParallelCall(itemIds: number[]) {
-    const splitItemIds: number[][] = [];
-    const tenthOfLength: number = itemIds.length * 1/10;
+  private setupParallelCall(objectIds: number[]) {
+    const splitObjectIds: number[][] = [];
+    const tenthOfLength: number = objectIds.length * 1/10;
     let start: number = 0, end: number = tenthOfLength;
 
     for (let i = 0; i < 10; i++) {
-      splitItemIds.push(itemIds.slice(start, end));
+      splitObjectIds.push(objectIds.slice(start, end));
       start += tenthOfLength, end += tenthOfLength;
     }
 
-    return splitItemIds;
+    return splitObjectIds;
   }
   
-  async getItemsByItemId(itemIds: number[]): Promise<Item[]> {
-    const endpoints: string[] = itemIds.map(itemId=>
-                                  `${ItemsRequestsService.baseUrl}/item/${itemId}.json?print=pretty`
+  async getObjectsByObjectId<Type>(Type: HNObject, objectIds: number[]): Promise<Type[]> {
+    const endpoints: string[] = objectIds.map(objectId=>
+                                  `${ItemsRequestsService.baseUrl}/${Type.toString()}/${objectId}.json?print=pretty`
 
                                   );
-    const items: Item[] = await Promise.all(endpoints.map(endpoint => 
+    const objects: Type[] = await Promise.all(endpoints.map(endpoint => 
         this.httpService.axiosRef.get(endpoint)))
 
           .then(responses => responses.map(
-            response => response.data as Item
+            response => response.data as Type
           ))
 
           .catch(err => {
             throw new HttpException('API Call Error', HttpStatus.FAILED_DEPENDENCY)
           });
-          
-    return items;
+
+    return objects;
   }
 }

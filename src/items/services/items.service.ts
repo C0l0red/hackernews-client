@@ -3,11 +3,11 @@ import { Item } from '../entities/item.entity';
 import { StoryList } from '../entities/story-list.entity';
 import {ItemsRequestsService} from './items.requests.service';
 import * as _ from 'lodash';
+import { User } from '../entities/user.entity';
 
 
 @Injectable()
-export class ItemsService {
-  
+export class ItemsService {  
   private topTenWordsInLast25Stories: string[];
   private topTenWordsInPostsFromPastWeek: string[];
 
@@ -32,11 +32,15 @@ export class ItemsService {
     return this.topTenWordsInPostsFromPastWeek;
   }
 
+  async findCommonestWordsInLast600StoriesFromUsersWithKarma(minimumKarma: number) {
+      const last600StoriesFromUsersWithKarma = this.getLast600StoriesFromUsersWithKarma(minimumKarma);
+  }
+
   private async getLatestStories(numberOfStories: number): Promise<Item[]> {
     const newStories: number[] = await this.requestsService.getStories(StoryList.NEW);
     const lastStoryItemIds: number[] = newStories.slice(0, numberOfStories);
 
-    return await this.requestsService.getItemsByItemId(lastStoryItemIds);
+    return await this.requestsService.getObjectsByObjectId<Item>(Item, lastStoryItemIds);
   }
 
   private async getPostsFromTimestampToNow(timestamp: number): Promise<Item[]> {
@@ -47,14 +51,30 @@ export class ItemsService {
     return posts;
   }
 
+  private async getLast600StoriesFromUsersWithKarma(minimumKarma: number) {
+		const predicate: Function = (user: User) => user.karma >= minimumKarma;
 
+		
+	}
+	
+	
   private async filterPostsFromPastWeek(maxItemId: number): Promise<Item[]> {
-    const itemIds = _.range(maxItemId, maxItemId-35000)
-    const items: Item[] = await this.requestsService.groupParallelCalls(itemIds);
+		const itemIds = _.range(maxItemId, maxItemId-35000)
+    const items: Item[] = await this.requestsService.groupParallelCalls(Item, itemIds);
     
     return items;
   }
 
+	private async getStoriesFromUsersWithPredicate(predicate: Function, numberOfUsers: number) {
+		let latestStoryIds: number[] = await this.requestsService.getStories(StoryList.NEW);
+		if (numberOfUsers < latestStoryIds.length) {
+			latestStoryIds = latestStoryIds.slice(0, numberOfUsers);
+		}
+
+		const storyItems: Item[] = await this.requestsService.groupParallelCalls(Item, latestStoryIds);
+		const userNames: string[] = storyItems.map(item => item.by);
+
+	}
   
 
   private getWordCountsInTitles(items: Item[]): object {
